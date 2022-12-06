@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
@@ -8,10 +9,14 @@ namespace Assistant
 {
     public partial class MainForm : System.Windows.Forms.Form
     {
+        private bool secondaryListSelected = false;
         internal void RedrawSkills()
         {
             skillList.BeginUpdate();
             skillList.Items.Clear();
+            secondarySkillList.BeginUpdate();
+            secondarySkillList.Items.Clear();
+
             double Total = 0;
             if (World.Player != null && World.Player.SkillsSent)
             {
@@ -31,20 +36,76 @@ namespace Assistant
                     {
                         Tag = sk
                     };
-                    skillList.Items.Add(lvi);
+
+                    if (isSecondary(items[0]))
+                    {
+                        secondarySkillList.Items.Add(lvi);
+                    } else
+                    {
+                        skillList.Items.Add(lvi);
+                    }
+                    
                 }
 
                 //Config.SetProperty( "SkillListAsc", false );
                 SortSkills();
+                SortSecondarySkills();
             }
+
+            secondarySkillList.EndUpdate();
             skillList.EndUpdate();
             baseTotal.Text = String.Format("{0:F1}", Total);
         }
 
         private ContextMenu m_SkillMenu;
 
+        private bool isSecondary(string skill)
+        {
+            /*
+             * 
+                Begging,
+                ArmsLore,
+                Camping,
+                Forensics,
+                Mining,
+                TasteID,
+                Cooking,
+                Fishing,
+                Lumberjacking(does not provide a damage bonus to axes),
+                Tracking,
+                Lockpicking,
+                Hiding,
+                Cartography,
+                Item Identification,
+                Herding,
+                Remove Trap,
+                Detecting Hidden
+            */
+            List<String> secondarySkills = new List<string>();
+            secondarySkills.Add("Fishing");
+            secondarySkills.Add("Begging");
+            secondarySkills.Add("Arms Lore");
+            secondarySkills.Add("Camping");
+            secondarySkills.Add("Forensics");
+            secondarySkills.Add("Mining");
+            secondarySkills.Add("Taste Identification");
+            secondarySkills.Add("Cooking");
+            secondarySkills.Add("Lumberjacking");
+            secondarySkills.Add("Tracking");
+            secondarySkills.Add("Lock Picking");
+            secondarySkills.Add("Hiding");
+            secondarySkills.Add("Cartography");
+            secondarySkills.Add("Item Identification");
+            secondarySkills.Add("Herding");
+            secondarySkills.Add("Remove Trap");
+            secondarySkills.Add("Detecting Hidden");
+
+            return secondarySkills.Contains(skill);
+        }
+
         private void skillList_MouseDown(object sender, System.Windows.Forms.MouseEventArgs e)
         {
+            secondaryListSelected = false;
             if (e.Button == MouseButtons.Right)
             {
                 ListView.SelectedListViewItemCollection items = skillList.SelectedItems;
@@ -72,6 +133,36 @@ namespace Assistant
             }
         }
 
+        private void secondarySkillList_MouseDown(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            secondaryListSelected= true;
+            if (e.Button == MouseButtons.Right)
+            {
+                ListView.SelectedListViewItemCollection items = secondarySkillList.SelectedItems;
+                if (items.Count <= 0)
+                    return;
+
+                Skill s = items[0].Tag as Skill;
+                if (s == null)
+                    return;
+
+                if (m_SkillMenu == null)
+                {
+                    m_SkillMenu = new ContextMenu(new MenuItem[]
+                    {
+                        new MenuItem( Language.GetString( LocString.SetSLUp ), new EventHandler( onSetSkillLockUP ) ),
+                        new MenuItem( Language.GetString( LocString.SetSLDown ), new EventHandler( onSetSkillLockDOWN ) ),
+                        new MenuItem( Language.GetString( LocString.SetSLLocked ), new EventHandler( onSetSkillLockLOCKED ) ),
+                    });
+                }
+
+                for (int i = 0; i < 3; i++)
+                    m_SkillMenu.MenuItems[i].Checked = ((int)s.Lock) == i;
+
+                m_SkillMenu.Show(secondarySkillList, new Point(e.X, e.Y));
+            }
+        }
+
         private void onSetSkillLockUP(object sender, EventArgs e)
         {
             SetLock(LockType.Up);
@@ -90,6 +181,12 @@ namespace Assistant
         private void SetLock(LockType lockType)
         {
             ListView.SelectedListViewItemCollection items = skillList.SelectedItems;
+
+            if(secondaryListSelected)
+            {
+                items = secondarySkillList.SelectedItems;
+            }
+
             if (items.Count <= 0)
                 return;
             for (int i = 0; i < items.Count; i++)
@@ -119,6 +216,26 @@ namespace Assistant
             for (int i = 0; i < Skill.Count; i++)
                 Total += World.Player.Skills[i].Base;
             baseTotal.Text = String.Format("{0:F1}", Total);
+
+            if(secondaryListSelected)
+            {
+                for (int i = 0; i < secondarySkillList.Items.Count; i++)
+                {
+                    ListViewItem cur = secondarySkillList.Items[i];
+                    if (cur.Tag == skill)
+                    {
+                        cur.SubItems[1].Text = String.Format("{0:F1}", skill.Value);
+                        cur.SubItems[2].Text = String.Format("{0:F1}", skill.Base);
+                        cur.SubItems[3].Text = String.Format("{0}{1:F1}", (skill.Delta > 0 ? "+" : String.Empty), skill.Delta);
+                        cur.SubItems[4].Text = String.Format("{0:F1}", skill.Cap);
+                        cur.SubItems[5].Text = skill.Lock.ToString()[0].ToString();
+                        SortSecondarySkills();
+                        return;
+                    }
+                }
+            }
+
+            return;
             for (int i = 0; i < skillList.Items.Count; i++)
             {
                 ListViewItem cur = skillList.Items[i];
@@ -141,6 +258,16 @@ namespace Assistant
                 RazorEnhanced.Settings.General.WriteBool("SkillListAsc", !RazorEnhanced.Settings.General.ReadBool("SkillListAsc"));
             else
                 RazorEnhanced.Settings.General.WriteInt("SkillListCol", e.Column);
+            SortSkills();
+            SortSecondarySkills();
+        }
+
+        private void OnSecondarySkillColClick(object sender, System.Windows.Forms.ColumnClickEventArgs e)
+        {
+            if (e.Column == RazorEnhanced.Settings.General.ReadInt("SecondarySkillListCol"))
+                RazorEnhanced.Settings.General.WriteBool("SecondarySkillListAsc", !RazorEnhanced.Settings.General.ReadBool("SecondarySkillListAsc"));
+            else
+                RazorEnhanced.Settings.General.WriteInt("SecondarySkillListCol", e.Column);
             SortSkills();
         }
 
@@ -170,6 +297,34 @@ namespace Assistant
             }
             skillList.EndUpdate();
             skillList.Refresh();
+        }
+
+        private void SortSecondarySkills()
+        {
+            int col = RazorEnhanced.Settings.General.ReadInt("SkillListCol");
+            bool asc = RazorEnhanced.Settings.General.ReadBool("SkillListAsc");
+
+            if (col < 0 || col > 5)
+                col = 0;
+
+            secondarySkillList.BeginUpdate();
+            if (col == 0 || col == 5)
+            {
+                secondarySkillList.ListViewItemSorter = null;
+                secondarySkillList.Sorting = asc ? SortOrder.Ascending : SortOrder.Descending;
+            }
+            else
+            {
+                LVDoubleComparer.Column = col;
+                LVDoubleComparer.Asc = asc;
+
+                secondarySkillList.ListViewItemSorter = LVDoubleComparer.Instance;
+
+                secondarySkillList.Sorting = SortOrder.None;
+                secondarySkillList.Sort();
+            }
+            secondarySkillList.EndUpdate();
+            secondarySkillList.Refresh();
         }
 
         private class LVDoubleComparer : IComparer
