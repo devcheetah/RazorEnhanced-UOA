@@ -233,9 +233,10 @@ namespace Assistant
                         return;
                     }
                 }
+                return;
             }
 
-            return;
+            
             for (int i = 0; i < skillList.Items.Count; i++)
             {
                 ListViewItem cur = skillList.Items[i];
